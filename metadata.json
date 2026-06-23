@@ -1,0 +1,6 @@
+{
+  "name": "نظام الشيباني للحلول التقنية",
+  "description": "نظام الشيباني للحلول التقنية لإدارة الرواتب والسلف والسحوبات - نسخة مستقلة للهواتف",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

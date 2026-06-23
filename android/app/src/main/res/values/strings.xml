@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">نظام أمين الشيباني الذكي</string>
+    <string name="title_activity_main">نظام أمين الشيباني الذكي</string>
+    <string name="package_name">com.aminshaibani.smartfinance</string>
+    <string name="custom_url_scheme">com.aminshaibani.smartfinance</string>
+</resources>

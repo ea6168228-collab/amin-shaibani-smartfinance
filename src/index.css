@@ -1,0 +1,186 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&family=Tajawal:wght@300;400;500;700;800;900&family=Noto+Kufi+Arabic:wght@300;400;500;600;750;700;800;900&family=Fira+Code:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Cairo", "Tajawal", "Noto Kufi Arabic", "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "Fira Code", "JetBrains Mono", monospace;
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased bg-slate-50 text-slate-900 transition-colors duration-200 select-none;
+    direction: rtl;
+  }
+}
+
+/* Custom Hide Scrollbar for clean mobile app feel */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-slate-200 dark:bg-zinc-800 rounded-full hover:bg-slate-300;
+}
+
+/* Print Overrides for beautiful formal report exports */
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm;
+  }
+  
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt;
+    direction: rtl;
+  }
+
+  /* Hide interactables during printing */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Make print content span the whole page */
+  .print-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  /* Table styles optimized for print */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    border: 1px solid #ddd !important;
+    padding: 6px 10px !important;
+    text-align: right !important;
+    font-size: 9pt !important;
+  }
+
+  th {
+    background-color: #f1f5f9 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* Custom Glassmorphism Cards */
+.glass-panel {
+  @apply bg-white/85 dark:bg-zinc-900/90 backdrop-blur-md border border-slate-100 dark:border-zinc-800 shadow-xs;
+}
+
+/* 
+  Tailwind v4 OKLCH Compatibility Overrides for html2canvas
+  We override all color variables within the PDF printable area to use standard HEX/RGB color formats.
+  This allows html2canvas to fetch safe computed values (rgb/hex) instead of oklch(), preventing the 
+  "Attempting to parse an unsupported color function 'oklch'" parser exception.
+*/
+[data-pdf-page], [data-pdf-page] * {
+  /* Slate colors override */
+  --color-slate-50: #f8fafc !important;
+  --color-slate-100: #f1f5f9 !important;
+  --color-slate-200: #e2e8f0 !important;
+  --color-slate-300: #cbd5e1 !important;
+  --color-slate-400: #94a3b8 !important;
+  --color-slate-500: #64748b !important;
+  --color-slate-600: #475569 !important;
+  --color-slate-700: #334155 !important;
+  --color-slate-800: #1e293b !important;
+  --color-slate-900: #0f172a !important;
+  --color-slate-950: #020617 !important;
+
+  /* Zinc colors override */
+  --color-zinc-50: #fafafa !important;
+  --color-zinc-100: #f4f4f5 !important;
+  --color-zinc-200: #e4e4e7 !important;
+  --color-zinc-300: #d4d4d8 !important;
+  --color-zinc-400: #a1a1aa !important;
+  --color-zinc-500: #71717a !important;
+  --color-zinc-600: #52525b !important;
+  --color-zinc-700: #3f3f46 !important;
+  --color-zinc-800: #27272a !important;
+  --color-zinc-900: #18181b !important;
+  --color-zinc-950: #09090b !important;
+
+  /* Indigo colors override */
+  --color-indigo-50: #e0e7ff !important;
+  --color-indigo-100: #c7d2fe !important;
+  --color-indigo-200: #a5b4fc !important;
+  --color-indigo-300: #818cf8 !important;
+  --color-indigo-400: #6366f1 !important;
+  --color-indigo-500: #6366f1 !important;
+  --color-indigo-600: #4f46e5 !important;
+  --color-indigo-700: #4338ca !important;
+  --color-indigo-950: #1e1b4b !important;
+
+  /* Emerald colors override */
+  --color-emerald-50: #ecfdf5 !important;
+  --color-emerald-100: #d1fae5 !important;
+  --color-emerald-200: #a7f3d0 !important;
+  --color-emerald-300: #6ee7b7 !important;
+  --color-emerald-400: #34d399 !important;
+  --color-emerald-500: #10b981 !important;
+  --color-emerald-600: #059669 !important;
+  --color-emerald-700: #047857 !important;
+  --color-emerald-800: #065f46 !important;
+  --color-emerald-950: #022c22 !important;
+
+  /* Amber colors override */
+  --color-amber-50: #fef3c7 !important;
+  --color-amber-100: #fde68a !important;
+  --color-amber-200: #fcd34d !important;
+  --color-amber-300: #fbbf24 !important;
+  --color-amber-400: #fbbf24 !important;
+  --color-amber-500: #f59e0b !important;
+  --color-amber-600: #d97706 !important;
+  --color-amber-700: #b45309 !important;
+  --color-amber-950: #78350f !important;
+
+  /* Rose colors override */
+  --color-rose-50: #fff1f2 !important;
+  --color-rose-100: #ffe4e6 !important;
+  --color-rose-200: #fecdd3 !important;
+  --color-rose-300: #fda4af !important;
+  --color-rose-400: #fb7185 !important;
+  --color-rose-500: #f43f5e !important;
+  --color-rose-600: #e11d48 !important;
+  --color-rose-700: #be123c !important;
+  --color-rose-950: #4c0519 !important;
+
+  /* Red colors override */
+  --color-red-50: #fef2f2 !important;
+  --color-red-100: #fee2e2 !important;
+  --color-red-200: #fecaca !important;
+  --color-red-450: #ef4444 !important;
+  --color-red-400: #f87171 !important;
+  --color-red-500: #ef4444 !important;
+  --color-red-600: #dc2626 !important;
+  --color-red-700: #b91c1c !important;
+  --color-red-808: #991b1b !important;
+
+  /* Custom palette overrides specifically for our financial table borders/colors */
+  --color-red-650: #c53030 !important;
+  --color-emerald-650: #2f855a !important;
+  --color-indigo-650: #4c51bf !important;
+  --color-slate-350: #94a3b8 !important;
+  --color-slate-450: #475569 !important;
+
+  /* Flat layout print cleanups to avoid OKLCH filter artifacts */
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
