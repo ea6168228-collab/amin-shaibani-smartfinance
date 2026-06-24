@@ -1,0 +1,11 @@
+name: Disabled Old Workflow
+
+on:
+workflow_dispatch:
+
+jobs:
+disabled:
+runs-on: ubuntu-latest
+steps:
+- name: Old workflow disabled
+run: echo "Old workflow disabled"
