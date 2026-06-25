@@ -1,18 +1,39 @@
-scripts:
-  - name: Install dependencies
-    script: npm install
+workflows:
+  android-apk:
+    name: Android APK Build
+    max_build_duration: 120
 
-  - name: Build web app
-    script: npm run build
+    environment:
+      node: 20
 
-  - name: Verify build output
-    script: ls dist
+    cache:
+      cache_paths:
+        - ~/.npm
+        - ~/.gradle/caches
+        - ~/.gradle/wrapper
 
-  - name: Sync Capacitor Android
-    script: npx cap sync android
+    scripts:
+      - name: Install dependencies
+        script: |
+          npm install
 
-  - name: Build Android APK
-    script: |
-      cd android
-      chmod +x gradlew
-      ./gradlew assembleDebug
+      - name: Build web app
+        script: |
+          npm run build
+
+      - name: Verify build output
+        script: |
+          ls dist
+
+      - name: Sync Capacitor Android
+        script: |
+          npx cap sync android
+
+      - name: Build Android APK
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+    artifacts:
+      - android/app/build/outputs/**/*.apk
