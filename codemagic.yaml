@@ -1,36 +1,18 @@
-workflows:
-  android-apk:
-    name: Android APK Build
-    max_build_duration: 120
-    instance_type: mac_mini_m2
+scripts:
+  - name: Install dependencies
+    script: npm install
 
-    environment:
-      node: 20
+  - name: Build web app
+    script: npm run build
 
-    cache:
-      cache_paths:
-        - ~/.npm
-        - ~/.gradle/caches
-        - ~/.gradle/wrapper
+  - name: Verify build output
+    script: ls dist
 
-    scripts:
-      - name: Install dependencies
-        script: |
-          npm install
+  - name: Sync Capacitor Android
+    script: npx cap sync android
 
-      - name: Build web app
-        script: |
-          npm run build
-
-      - name: Sync Capacitor Android
-        script: |
-          npx cap sync android
-
-      - name: Build Android APK
-        script: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
-
-    artifacts:
-      - android/app/build/outputs/**/*.apk
+  - name: Build Android APK
+    script: |
+      cd android
+      chmod +x gradlew
+      ./gradlew assembleDebug
