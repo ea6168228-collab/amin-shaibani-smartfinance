@@ -4,15 +4,16 @@ workflows:
     max_build_duration: 120
 
     environment:
-  node: 22
-
-    cache:
-      cache_paths:
-        - ~/.npm
-        - ~/.gradle/caches
-        - ~/.gradle/wrapper
+      node: 22
+      java: 17
 
     scripts:
+      - name: Setup Node (Force 22)
+        script: |
+          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+          apt-get install -y nodejs
+          node -v
+
       - name: Install dependencies
         script: |
           npm install
