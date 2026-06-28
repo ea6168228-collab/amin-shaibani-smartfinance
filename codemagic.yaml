@@ -18,16 +18,16 @@ workflows:
       - name: Install dependencies
         script: npm ci
 
-      - name: Build web
+      - name: Build web app
         script: npm run build
 
-      - name: Sync Capacitor
+      - name: Sync Capacitor Android
         script: npx cap sync android
 
-      - name: Fix permissions
+      - name: Fix gradlew permission
         script: chmod +x android/gradlew
 
-      - name: Build Android
+      - name: Build APK & AAB
         script: |
           cd android
           ./gradlew clean
@@ -37,35 +37,6 @@ workflows:
       - android/app/build/outputs/apk/release/*.apk
       - android/app/build/outputs/bundle/release/*.aab
 
-    publishing:
-      email:
-        recipients:
-          - ea6168228@gmail.com
-        notify:
-          success: true
-          failure: true          ./gradlew clean
-          ./gradlew assembleRelease bundleRelease
-
-    artifacts:
-      - android/app/build/outputs/apk/release/*.apk
-      - android/app/build/outputs/bundle/release/*.aab
-
-    publishing:
-      email:
-        recipients:
-          - ea6168228@gmail.com
-        notify:
-          success: true
-          failure: true      - android/app/build/outputs/apk/release/*.apk
-      - android/app/build/outputs/bundle/release/*.aab
-
-    publishing:
-      email:
-        recipients:
-          - ea6168228@gmail.com
-        notify:
-          success: true
-          failure: true      - android/app/build/outputs/bundle/release/*.aab
     publishing:
       email:
         recipients:
