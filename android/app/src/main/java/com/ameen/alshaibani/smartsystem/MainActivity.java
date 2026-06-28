@@ -1,4 +1,4 @@
-package com.aminshaibani.smartfinance;
+package com.ameen.alshaibani.smartsystem;
 
 import com.getcapacitor.BridgeActivity;
 

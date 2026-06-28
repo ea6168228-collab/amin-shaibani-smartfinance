@@ -1,4 +1,6 @@
 // Audit Logger Utility for Offline-First Activity Logs
+import { buildAuditLog } from './audit/auditLogger';
+
 export interface AuditLog {
   id: string;
   user: string;
@@ -8,6 +10,11 @@ export interface AuditLog {
   notes: string;
   oldValue?: string;
   newValue?: string;
+  username?: string;
+  action?: string;
+  module?: string;
+  details?: string;
+  deviceType?: string;
 }
 
 export function addAuditLog(actionType: string, entity: string, notes: string, oldValue?: string, newValue?: string) {
@@ -23,6 +30,7 @@ export function addAuditLog(actionType: string, entity: string, notes: string, o
       view_only: 'مستخدم عرض فقط'
     };
     const roleLabel = roleLabels[activeRole] || activeRole;
+    const fullUserLabel = `${userName} [${roleLabel}]`;
 
     const logsStr = localStorage.getItem('amin_sh_system_audit_logs') || '[]';
     let logs: AuditLog[] = [];
@@ -33,11 +41,12 @@ export function addAuditLog(actionType: string, entity: string, notes: string, o
       logs = [];
     }
 
+    const unifiedLog = buildAuditLog(userName, entity, actionType, notes);
+
     const newLog: AuditLog = {
-      id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-      user: `${userName} [${roleLabel}]`,
+      ...unifiedLog,
+      user: fullUserLabel,
       actionType,
-      timestamp: new Date().toISOString(), // Use standard ISO to allow proper sorting, we format it on display
       entity,
       notes,
       oldValue,

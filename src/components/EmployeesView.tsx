@@ -113,13 +113,13 @@ export default function EmployeesView({
     }
 
     // Direct multi-factor match check across all parameters
-    const matchesName = emp.name.toLowerCase().includes(query);
-    const matchesId = emp.id.toLowerCase().includes(query);
-    const matchesJob = emp.jobTitle.toLowerCase().includes(query);
-    const matchesPhone = emp.phone.includes(query);
-    const matchesNotes = emp.notes && emp.notes.toLowerCase().includes(query);
-    const matchesDate = emp.hireDate.includes(query);
-    const matchesSalary = emp.salary.toString().includes(query);
+    const matchesName = (emp.name || '').toLowerCase().includes(query);
+    const matchesId = (emp.id || '').toLowerCase().includes(query);
+    const matchesJob = (emp.jobTitle || '').toLowerCase().includes(query);
+    const matchesPhone = (emp.phone || '').includes(query);
+    const matchesNotes = emp.notes && (emp.notes || '').toLowerCase().includes(query);
+    const matchesDate = (emp.hireDate || '').includes(query);
+    const matchesSalary = (emp.salary || '').toString().includes(query);
 
     // Advanced search syntax support for numeric inequality (e.g., ">3000" or "3000<")
     let matchesAdvancedSalary = false;

@@ -186,22 +186,22 @@ export default function TransactionsLogView({
 
       // Check if employee match
       const emp = employees.find(e => e.id === tx.employeeId);
-      const matchesEmpName = emp ? emp.name.toLowerCase().includes(query) : false;
-      const matchesEmpId = tx.employeeId.toLowerCase().includes(query);
+      const matchesEmpName = emp ? (emp.name || '').toLowerCase().includes(query) : false;
+      const matchesEmpId = (tx.employeeId || '').toLowerCase().includes(query);
 
       // Check if type matches Arabic representation or English name
-      const arabicType = getArabicTypeName(tx.type).toLowerCase();
-      const matchesType = tx.type.toLowerCase().includes(query) || arabicType.includes(query);
+      const arabicType = (getArabicTypeName(tx.type) || '').toLowerCase();
+      const matchesType = (tx.type || '').toLowerCase().includes(query) || arabicType.includes(query);
 
       // Date match
-      const matchesDate = tx.date.includes(query);
+      const matchesDate = (tx.date || '').includes(query);
 
       // Statement & notes match
-      const matchesStatement = tx.statement.toLowerCase().includes(query);
-      const matchesNotes = tx.notes && tx.notes.toLowerCase().includes(query);
+      const matchesStatement = (tx.statement || '').toLowerCase().includes(query);
+      const matchesNotes = tx.notes && (tx.notes || '').toLowerCase().includes(query);
 
       // ID match
-      const matchesId = tx.id.toLowerCase().includes(query);
+      const matchesId = (tx.id || '').toLowerCase().includes(query);
 
       // Value match
       const matchesAmount = tx.debit.toString().includes(query) || tx.credit.toString().includes(query);

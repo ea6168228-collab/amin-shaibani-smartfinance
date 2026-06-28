@@ -761,7 +761,7 @@ export default function AssociationsView({
     
     // Reverse general ledger posting
     const tag = `[الجمعية:${activeAssoc.id}]`;
-    const reversed = transactions.filter(t => !t.notes?.includes(tag) || !t.statement.includes(p.statement));
+    const reversed = transactions.filter(t => !t.notes?.includes(tag) || !(t.statement || '').includes(p.statement));
     setTransactions(reversed);
   };
 
@@ -945,7 +945,7 @@ export default function AssociationsView({
 
     // Reverse company ledger
     const tag = `[الجمعية:${activeAssoc.id}]`;
-    setTransactions(transactions.filter(tx => !tx.notes?.includes(tag) || !tx.statement.includes(t.statement)));
+    setTransactions(transactions.filter(tx => !tx.notes?.includes(tag) || !(tx.statement || '').includes(t.statement)));
     alert('✅ تم حذف حركة الجمعية وإرجاع الأرصدة بنجاح.');
   };
 
@@ -2202,7 +2202,7 @@ export default function AssociationsView({
                             <tbody>
                               {payments
                                 .filter(p => p.associationId === activeAssoc.id)
-                                .filter(p => p.statement.toLowerCase().includes(searchTerm.toLowerCase()) || p.date.includes(searchTerm))
+                                .filter(p => (p.statement || '').toLowerCase().includes(searchTerm.toLowerCase()) || (p.date || '').includes(searchTerm))
                                 .map((p) => (
                                   <tr key={p.id} className="border-b border-slate-100 dark:border-zinc-805 hover:bg-slate-50/50">
                                     <td className="py-3 px-3 text-center font-mono text-slate-500">{p.date}</td>
@@ -2248,7 +2248,7 @@ export default function AssociationsView({
                             <tbody>
                               {groupTransactions
                                 .filter(t => t.associationId === activeAssoc.id)
-                                .filter(t => t.statement.toLowerCase().includes(searchTerm.toLowerCase()) || (t.memberName && t.memberName.toLowerCase().includes(searchTerm.toLowerCase())))
+                                .filter(t => (t.statement || '').toLowerCase().includes(searchTerm.toLowerCase()) || (t.memberName && (t.memberName || '').toLowerCase().includes(searchTerm.toLowerCase())))
                                 .map((t) => (
                                   <tr key={t.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                                     <td className="py-3 px-3 text-center font-mono text-slate-500">{t.date}</td>
@@ -2336,7 +2336,7 @@ export default function AssociationsView({
                             {activeAssoc.role === 'manager' ? (
                               groupTransactions
                                 .filter(t => t.associationId === activeAssoc.id && ['payment', 'late_payment'].includes(t.type))
-                                .filter(t => t.statement.toLowerCase().includes(searchTerm.toLowerCase()) || (t.memberName && t.memberName.toLowerCase().includes(searchTerm.toLowerCase())))
+                                .filter(t => (t.statement || '').toLowerCase().includes(searchTerm.toLowerCase()) || (t.memberName && (t.memberName || '').toLowerCase().includes(searchTerm.toLowerCase())))
                                 .map((t) => {
                                   const payStatus = t.paymentStatus || 'paid';
                                   const statusLabel = payStatus === 'paid' ? 'مدفوع كامل' : payStatus === 'partial' ? 'مدفوع جزئي' : 'متأخر سداده';
@@ -2372,7 +2372,7 @@ export default function AssociationsView({
                             ) : (
                               payments
                                 .filter(p => p.associationId === activeAssoc.id)
-                                .filter(p => p.statement.toLowerCase().includes(searchTerm.toLowerCase()) || p.date.includes(searchTerm))
+                                .filter(p => (p.statement || '').toLowerCase().includes(searchTerm.toLowerCase()) || (p.date || '').includes(searchTerm))
                                 .map((p) => (
                                   <tr key={p.id} className="border-b border-slate-100 dark:border-zinc-805 hover:bg-slate-50/50">
                                     <td className="py-3 px-3 text-center font-mono text-slate-500">{p.date}</td>
@@ -2460,7 +2460,7 @@ export default function AssociationsView({
                           <tbody>
                             {groupTransactions
                               .filter(t => t.associationId === activeAssoc.id && t.type === 'received_association')
-                              .filter(t => t.statement.toLowerCase().includes(searchTerm.toLowerCase()) || (t.memberName && t.memberName.toLowerCase().includes(searchTerm.toLowerCase())))
+                              .filter(t => (t.statement || '').toLowerCase().includes(searchTerm.toLowerCase()) || (t.memberName && (t.memberName || '').toLowerCase().includes(searchTerm.toLowerCase())))
                               .map((t) => {
                                 const payStatus = t.paymentStatus || 'paid';
                                 const statusLabel = payStatus === 'paid' ? 'استلام كامل ✅' : payStatus === 'partial' ? 'استلام جزئي ⏳' : 'مؤجل صرفه ⌛';
@@ -2523,7 +2523,7 @@ export default function AssociationsView({
                             .filter(sch => {
                               const mem = members.find(m => m.id === sch.memberId);
                               const memName = sch.memberId === 'user' ? 'أنا المشترك' : (mem?.name || '');
-                              return memName.toLowerCase().includes(searchTerm.toLowerCase()) || sch.dueDate.includes(searchTerm);
+                              return (memName || '').toLowerCase().includes(searchTerm.toLowerCase()) || (sch.dueDate || '').includes(searchTerm);
                             })
                             .map((sch) => {
                               const mem = members.find(m => m.id === sch.memberId);
@@ -2576,7 +2576,7 @@ export default function AssociationsView({
                         <tbody>
                           {receipts
                             .filter(rc => rc.associationId === activeAssoc.id)
-                            .filter(rc => rc.receiptNumber.includes(searchTerm) || rc.notes.toLowerCase().includes(searchTerm.toLowerCase()))
+                            .filter(rc => (rc.receiptNumber || '').includes(searchTerm) || (rc.notes || '').toLowerCase().includes(searchTerm.toLowerCase()))
                             .map((rc) => {
                               const mem = members.find(m => m.id === rc.memberId);
                               const targetName = rc.memberId === 'user' ? 'أنا المشترك' : (mem?.name || 'صندوق كلي');

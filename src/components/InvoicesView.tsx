@@ -54,44 +54,86 @@ export default function InvoicesView({
   
   // Clients (shared)
   const [clients, setClients] = useState<Client[]>(() => {
-    const data = localStorage.getItem(clientsKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(clientsKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   // Invoices (new)
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
-    const data = localStorage.getItem(invoicesKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(invoicesKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   // Quotations (new)
   const [quotations, setQuotations] = useState<Quotation[]>(() => {
-    const data = localStorage.getItem(quotationsKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(quotationsKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   // Orders / Service requests (new)
   const [orders, setOrders] = useState<ClientOrder[]>(() => {
-    const data = localStorage.getItem(ordersKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(ordersKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   // Client Debts (shared)
   const [debts, setDebts] = useState<ClientDebt[]>(() => {
-    const data = localStorage.getItem(debtsKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(debtsKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   // Client Collections / Settle payments (shared)
   const [collections, setCollections] = useState<ClientCollection[]>(() => {
-    const data = localStorage.getItem(collectionsKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(collectionsKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   // General accounting vouchers (shared)
   const [vouchers, setVouchers] = useState<PaymentVoucher[]>(() => {
-    const data = localStorage.getItem(vouchersKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(vouchersKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   // Treasury Cash State (shared)

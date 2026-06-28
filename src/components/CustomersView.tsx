@@ -48,34 +48,70 @@ export default function CustomersView({
 
   // Core States
   const [clients, setClients] = useState<Client[]>(() => {
-    const data = localStorage.getItem(clientsKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(clientsKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   const [services, setServices] = useState<ClientService[]>(() => {
-    const data = localStorage.getItem(servicesKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(servicesKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   const [debts, setDebts] = useState<ClientDebt[]>(() => {
-    const data = localStorage.getItem(debtsKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(debtsKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   const [collections, setCollections] = useState<ClientCollection[]>(() => {
-    const data = localStorage.getItem(collectionsKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(collectionsKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   const [serviceTypes, setServiceTypes] = useState<string[]>(() => {
-    const data = localStorage.getItem(serviceTypesKey);
-    return data ? JSON.parse(data) : ['خدمة التحصيل', 'استشارة قانونية', 'تخليص جمركي', 'خدمة شحن وتوصيل', 'صيانة تقنية', 'عقارات ومقاولات', 'أخرى'];
+    try {
+      const data = localStorage.getItem(serviceTypesKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return ['خدمة التحصيل', 'استشارة قانونية', 'تخليص جمركي', 'خدمة شحن وتوصيل', 'صيانة تقنية', 'عقارات ومقاولات', 'أخرى'];
   });
 
   // Load standard vouchers and treasury to integrate
   const [vouchers, setVouchers] = useState<PaymentVoucher[]>(() => {
-    const data = localStorage.getItem(vouchersKey);
-    return data ? JSON.parse(data) : [];
+    try {
+      const data = localStorage.getItem(vouchersKey);
+      if (data) {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) { console.error(e); }
+    return [];
   });
 
   const [treasuryState, setTreasuryState] = useState<TreasuryState>(() => {
@@ -275,9 +311,9 @@ export default function CustomersView({
   // Clients filtered list
   const filteredClients = useMemo(() => {
     return clients.filter(c => {
-      const matchSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          c.phone.includes(searchQuery) ||
-                          (c.address && c.address.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchSearch = (c.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (c.phone || '').includes(searchQuery) ||
+                          (c.address && (c.address || '').toLowerCase().includes(searchQuery.toLowerCase()));
       const matchStatus = statusFilter === 'all' ? true : c.status === statusFilter;
       return matchSearch && matchStatus;
     });
@@ -287,8 +323,9 @@ export default function CustomersView({
   const filteredServices = useMemo(() => {
     return services.filter(s => {
       const client = clients.find(c => c.id === s.customerId);
-      const matchSearch = (client?.name.toLowerCase().includes(searchQuery.toLowerCase()) || false) || 
-                          s.serviceType.toLowerCase().includes(searchQuery.toLowerCase());
+      const clientName = client ? client.name : '';
+      const matchSearch = (clientName || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          (s.serviceType || '').toLowerCase().includes(searchQuery.toLowerCase());
       return matchSearch;
     });
   }, [services, clients, searchQuery]);
@@ -387,7 +424,7 @@ export default function CustomersView({
     const actualServiceType = serviceTypeSelected === 'أخرى' && customServiceType.trim() ? customServiceType.trim() : serviceTypeSelected;
     
     // Add custom service type if it was added
-    if (serviceTypeSelected === 'أخرى' && customServiceType.trim() && !serviceTypes.includes(customServiceType.trim())) {
+    if (serviceTypeSelected === 'أخرى' && customServiceType.trim() && !(serviceTypes || []).includes(customServiceType.trim())) {
       setServiceTypes(prev => [...prev, customServiceType.trim()]);
     }
 

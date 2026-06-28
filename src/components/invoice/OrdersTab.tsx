@@ -192,9 +192,9 @@ export default function OrdersTab({
     return orders.filter(o => {
       const client = clients.find(c => c.id === o.customerId);
       const clientName = client ? client.name : '';
-      const matchesSearch = o.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            o.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = (o.id || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            (clientName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (o.description || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'all' || o.status === statusFilter;
       return matchesSearch && matchesStatus;
     });

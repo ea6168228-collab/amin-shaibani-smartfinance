@@ -31,6 +31,7 @@ interface SidebarProps {
   institutionName: string;
   loggedInUserName: string;
   onLogout: () => void;
+  session?: any;
 }
 
 export default function Sidebar({
@@ -42,10 +43,108 @@ export default function Sidebar({
   setDarkMode,
   institutionName,
   loggedInUserName,
-  onLogout
+  onLogout,
+  session: propSession
 }: SidebarProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(() => (window as any).pwaPrompt || null);
   const [showInstallBtn, setShowInstallBtn] = useState(true);
+
+  const [session, setSessionState] = useState<any>(() => {
+    if (propSession) return propSession;
+    const cached = localStorage.getItem('user_session');
+    return cached ? JSON.parse(cached) : null;
+  });
+
+  useEffect(() => {
+    if (propSession) {
+      setSessionState(propSession);
+    }
+  }, [propSession]);
+
+  const safeSession = session || {
+    role: 'viewer'
+  };
+
+  const hasRole = (role: string) => {
+    return safeSession?.role?.toLowerCase() === role.toLowerCase();
+  };
+
+  const isAdmin = () => hasRole('admin');
+  const isAccountant = () => hasRole('accountant');
+  const isViewer = () => hasRole('viewer');
+
+  const isCustomWorkspace = safeSession?.role?.toLowerCase() === 'user' && !!safeSession?.id && !['admin', 'accountant', 'viewer', 'entry', 'supervisor'].includes(safeSession?.id);
+
+  const getBadge = (type: string) => {
+    const normalized = type.toLowerCase();
+    switch(normalized) {
+      case 'new':
+      case 'جديد':
+        return { color: 'red', text: 'جديد' };
+      case 'stable':
+      case 'مستقر':
+        return { color: 'green', text: 'مستقر' };
+      case 'beta':
+      case 'تجريبي':
+        return { color: 'orange', text: 'تجريبي' };
+      default:
+        if (type === 'رصيد دقيق') {
+          return { color: 'orange', text: 'رصيد دقيق' };
+        }
+        if (type === 'جديد متكامل') {
+          return { color: 'green', text: 'جديد متكامل' };
+        }
+        if (type === 'المرحلة ٧') {
+          return { color: 'orange', text: 'المرحلة ٧' };
+        }
+        if (type === 'جديد ذكي') {
+          return { color: 'red', text: 'جديد ذكي' };
+        }
+        if (type === 'الأمان') {
+          return { color: 'red', text: 'الأمان' };
+        }
+        return { color: 'red', text: type };
+    }
+  };
+
+  interface SidebarItemProps {
+    id: string;
+    label: string;
+    icon: React.ComponentType<any>;
+    badgeType?: string;
+  }
+
+  const SidebarItem = ({ id, label, icon: IconComponent, badgeType }: SidebarItemProps) => {
+    const isActive = activeTab === id;
+    const badgeInfo = badgeType ? getBadge(badgeType) : null;
+
+    return (
+      <button
+        onClick={() => setActiveTab(id)}
+        className={`w-full text-right flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+          isActive
+            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20 font-semibold'
+            : 'text-slate-300 hover:bg-indigo-950 hover:text-white'
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <IconComponent size={18} className={isActive ? 'text-white' : 'text-slate-400'} />
+          <span>{label}</span>
+        </div>
+        {badgeInfo && (
+          <span 
+            className={`text-[9px] rounded-full px-2 py-0.5 animate-pulse font-bold text-white ${
+              badgeInfo.color === 'red' ? 'bg-red-500' :
+              badgeInfo.color === 'green' ? 'bg-emerald-500' :
+              badgeInfo.color === 'orange' ? 'bg-amber-500' : 'bg-indigo-500'
+            }`}
+          >
+            {badgeInfo.text}
+          </span>
+        )}
+      </button>
+    );
+  };
 
   useEffect(() => {
     const handleBeforeInstall = (e: any) => {
@@ -155,34 +254,14 @@ export default function Sidebar({
     }
   };
 
-  const getRoleLabel = (role: UserRole) => {
-    const isCustomWorkspace = role === UserRole.USER && !!localStorage.getItem('amin_sh_user_id') && !['admin', 'accountant', 'viewer'].includes(localStorage.getItem('amin_sh_user_id') || '');
+  const getRoleLabel = () => {
     if (isCustomWorkspace) {
       return 'مساحة عمل مخصصة (العمليات والتقارير)';
     }
-    switch(role) {
-      case UserRole.ADMIN: return 'مدير النظام (كامل الصلاحيات)';
-      case UserRole.ACCOUNTANT: return 'محاسب (العمليات والتقارير)';
-      case UserRole.USER: return 'مستخدم عادي (عرض وتقارير فقط)';
-    }
+    if (isAdmin()) return 'مدير النظام (كامل الصلاحيات)';
+    if (isAccountant()) return 'محاسب (العمليات والتقارير)';
+    return 'مستخدم عادي (عرض وتقارير فقط)';
   };
-
-  const tabs = [
-    { id: 'dashboard', label: 'الرئيسية والإحصائيات', icon: LayoutDashboard },
-    { id: 'employees', label: 'إدارة الموظفين', icon: Users },
-    { id: 'transactions', label: 'شاشة السحوبات الشهرية', icon: Receipt },
-    { id: 'associations', label: 'وحدة إدارة الجمعيات', icon: Coins, badge: 'رصيد دقيق' },
-    { id: 'corporate-finance', label: 'المحاسبة المؤسسية والخزنة', icon: ShieldCheck, badge: 'جديد متكامل' },
-    { id: 'customers', label: 'إدارة العملاء والديون والتحصيل', icon: UserCheck, badge: 'جديد متكامل' },
-    { id: 'invoices', label: 'الفواتير وعروض الأسعار والطلبات', icon: FileText, badge: 'المرحلة ٧' },
-    { id: 'reports', label: 'كشوفات الحساب والتقارير', icon: FilePieChart },
-    { id: 'ai-assistant', label: 'المساعد الذكي أمين', icon: Sparkles, badge: 'جديد ذكي' },
-    { id: 'settings', label: 'بيانات المؤسسة والإعدادات', icon: SettingsIcon },
-    { id: 'maintenance', label: 'لوحة الصيانة والتشخيص', icon: Wrench, badge: 'الأمان' },
-  ];
-
-  const isCustomWorkspace = currentUserRole === UserRole.USER && !!localStorage.getItem('amin_sh_user_id') && !['admin', 'accountant', 'viewer'].includes(localStorage.getItem('amin_sh_user_id') || '');
-  const filteredTabs = isCustomWorkspace ? tabs.filter(tab => tab.id !== 'settings' && tab.id !== 'maintenance') : tabs;
 
   return (
     <aside className="w-full lg:w-72 bg-gradient-to-b from-slate-900 to-indigo-950 text-slate-100 flex flex-col h-auto lg:h-screen lg:sticky lg:top-0 shadow-xl border-l border-indigo-900/40 no-print flex-shrink-0">
@@ -214,7 +293,7 @@ export default function Sidebar({
                   {loggedInUserName || 'مستخدم النظام'}
                 </span>
                 <span className="text-[10px] text-indigo-300 font-bold mt-0.5">
-                  {getRoleLabel(currentUserRole)}
+                  {getRoleLabel()}
                 </span>
               </div>
             </div>
@@ -233,31 +312,56 @@ export default function Sidebar({
 
       {/* Navigation Tabs */}
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {filteredTabs.map((tab) => {
-          const IconComponent = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`w-full text-right flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                isActive
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20 font-semibold'
-                  : 'text-slate-300 hover:bg-indigo-950 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <IconComponent size={18} className={isActive ? 'text-white' : 'text-slate-400'} />
-                <span>{tab.label}</span>
-              </div>
-              {tab.badge && (
-                <span className="text-[9px] bg-red-500 text-white rounded-full px-2 py-0.5 animate-pulse font-bold">
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
+        {/* الرئيسية والإحصائيات */}
+        <SidebarItem id="dashboard" label="الرئيسية والإحصائيات" icon={LayoutDashboard} />
+
+        {/* إدارة الموظفين */}
+        {(isAdmin() || isAccountant() || isCustomWorkspace) && (
+          <SidebarItem id="employees" label="إدارة الموظفين" icon={Users} />
+        )}
+
+        {/* شاشة السحوبات الشهرية */}
+        {(isAdmin() || isAccountant() || isCustomWorkspace) && (
+          <SidebarItem id="transactions" label="شاشة السحوبات الشهرية" icon={Receipt} />
+        )}
+
+        {/* وحدة إدارة الجمعيات */}
+        {(isAdmin() || isAccountant() || isCustomWorkspace) && (
+          <SidebarItem id="associations" label="وحدة إدارة الجمعيات" icon={Coins} badgeType="رصيد دقيق" />
+        )}
+
+        {/* المحاسبة المؤسسية والخزنة */}
+        {(isAdmin() || isAccountant() || isCustomWorkspace) && (
+          <SidebarItem id="corporate-finance" label="المحاسبة المؤسسية والخزنة" icon={ShieldCheck} badgeType="جديد متكامل" />
+        )}
+
+        {/* إدارة العملاء والديون والتحصيل */}
+        {(isAdmin() || isAccountant() || isCustomWorkspace) && (
+          <SidebarItem id="customers" label="إدارة العملاء والديون والتحصيل" icon={UserCheck} badgeType="جديد متكامل" />
+        )}
+
+        {/* الفواتير وعروض الأسعار والطلبات */}
+        {(isAdmin() || isAccountant() || isCustomWorkspace) && (
+          <SidebarItem id="invoices" label="الفواتير وعروض الأسعار والطلبات" icon={FileText} badgeType="المرحلة ٧" />
+        )}
+
+        {/* كشوفات الحساب والتقارير */}
+        <SidebarItem id="reports" label="كشوفات الحساب والتقارير" icon={FilePieChart} />
+
+        {/* المساعد الذكي أمين */}
+        {(isAdmin() || isAccountant() || isCustomWorkspace) && (
+          <SidebarItem id="ai-assistant" label="المساعد الذكي أمين" icon={Sparkles} badgeType="جديد ذكي" />
+        )}
+
+        {/* بيانات المؤسسة والإعدادات */}
+        {!isCustomWorkspace && (isAdmin() || isAccountant()) && (
+          <SidebarItem id="settings" label="بيانات المؤسسة والإعدادات" icon={SettingsIcon} />
+        )}
+
+        {/* لوحة الصيانة والتشخيص */}
+        {!isCustomWorkspace && isAdmin() && (
+          <SidebarItem id="maintenance" label="لوحة الصيانة والتشخيص" icon={Wrench} badgeType="الأمان" />
+        )}
       </nav>
 
       {/* Sidebar Footer Actions */}

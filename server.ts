@@ -1,10 +1,12 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import AdmZip from 'adm-zip';
 import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
+import hardenedApp from './server/app';
 
 dotenv.config();
 
@@ -23,6 +25,9 @@ const _filename = getFilename();
 
 const app = express();
 app.use(express.json());
+
+// Mount the Hardened Phase 10.5 Sub-Application
+app.use(hardenedApp);
 
 const PORT = 3000;
 
@@ -297,20 +302,34 @@ app.post('/api/whatsapp/send-test', async (req, res) => {
 
       if (testResponse.ok) {
         let isActuallySent = true;
+        let mappedError = '';
         try {
           const json = JSON.parse(responseText);
-          if (json.sent === "false" || json.success === false) {
+          if (json.sent === "false" || json.success === false || json.error) {
             isActuallySent = false;
+            const rawError = json.error || json.message || '';
+            if (rawError.includes('Stopped due to non-payment') || rawError.includes('subscription') || rawError.includes('non-payment')) {
+              mappedError = 'حساب بوابة الواتساب (UltraMsg) متوقف حالياً لعدم السداد أو انتهاء الاشتراك. يرجى تجديد الاشتراك لتفعيل الإرسال التلقائي للرسائل.';
+            } else {
+              mappedError = rawError;
+            }
           }
         } catch (e) {}
 
         if (isActuallySent) {
           return res.json({ success: true, message: 'تم إرسال رسالة الاختبار بنجاح للرقم!' });
         } else {
-          return res.status(400).json({ success: false, error: `استجاب السيرفر بنجاح ولكن تعذر تسليم الرسالة (مثلاً الحساب معطل أو الرقم غير مسجل). التفاصيل المرجعة: ${responseText}` });
+          const detail = mappedError || `تعذر تسليم الرسالة. التفاصيل المرجعة: ${responseText}`;
+          return res.status(400).json({ success: false, error: detail });
         }
       } else {
-        return res.status(400).json({ success: false, error: `رفض خادم المزود إرسال الرسالة. كود الاستجابة: ${testResponse.status} | تفاصيل الرد: ${responseText.slice(0, 200)}` });
+        let mappedError = '';
+        if (responseText.includes('Stopped due to non-payment') || responseText.includes('subscription') || responseText.includes('non-payment')) {
+          mappedError = 'حساب بوابة الواتساب (UltraMsg) متوقف حالياً لعدم السداد أو انتهاء الاشتراك. يرجى تجديد الاشتراك لتفعيل الإرسال التلقائي للرسائل.';
+        } else {
+          mappedError = `رفض خادم المزود إرسال الرسالة. كود الاستجابة: ${testResponse.status} | تفاصيل الرد: ${responseText.slice(0, 200)}`;
+        }
+        return res.status(400).json({ success: false, error: mappedError });
       }
     } catch (err: any) {
       clearTimeout(timeoutId);
@@ -464,7 +483,12 @@ app.post('/api/otp/send', async (req, res) => {
       const json = JSON.parse(responseText);
       if (json.error || json.message) {
         isSentOk = false;
-        errorMessage = json.error || json.message || errorMessage;
+        const rawError = json.error || json.message || errorMessage;
+        if (rawError.includes('Stopped due to non-payment') || rawError.includes('subscription') || rawError.includes('non-payment')) {
+          errorMessage = 'حساب بوابة الواتساب (UltraMsg) متوقف حالياً لعدم السداد أو انتهاء الاشتراك. يرجى تجديد الاشتراك لتفعيل الإرسال التلقائي للرسائل.';
+        } else {
+          errorMessage = rawError;
+        }
       } else if (json.status === "blocked") {
         isSentOk = false;
         errorMessage = "الحساب محظور في بوابة المزود (Instance Blocked)";
@@ -475,6 +499,9 @@ app.post('/api/otp/send', async (req, res) => {
     } catch (e) {
       if (!response.ok) {
         isSentOk = false;
+        if (responseText.includes('Stopped due to non-payment') || responseText.includes('subscription') || responseText.includes('non-payment')) {
+          errorMessage = 'حساب بوابة الواتساب (UltraMsg) متوقف حالياً لعدم السداد أو انتهاء الاشتراك. يرجى تجديد الاشتراك لتفعيل الإرسال التلقائي للرسائل.';
+        }
       }
     }
 
@@ -696,6 +723,86 @@ ${JSON.stringify(transactions, null, 2)}
       error: 'حدث خطأ أثناء معالجة التحليل بالذكاء الاصطناعي.',
       details: error?.message || String(error)
     });
+  }
+});
+
+// API Endpoint to download complete project directory compiled into a high-compression ZIP file
+app.get('/api/backup/project-zip', (req, res) => {
+  try {
+    const zip = new AdmZip();
+    const rootDir = process.cwd();
+    
+    // Add critical folders & files selectively to minimize size and exclude node_modules, build outputs, .git, etc.
+    const foldersToInclude = ['src', 'public', 'assets', 'android'];
+    const filesToInclude = [
+      'package.json',
+      'package-lock.json',
+      'tsconfig.json',
+      'vite.config.ts',
+      'capacitor.config.json',
+      'capacitor.config.ts',
+      'codemagic.yaml',
+      'index.html',
+      'server.ts',
+      'whatsapp_config.json',
+      '.env.example',
+      '.gitignore',
+      'metadata.json'
+    ];
+    
+    // Add folders
+    for (const folder of foldersToInclude) {
+      const folderPath = path.join(rootDir, folder);
+      if (fs.existsSync(folderPath)) {
+        if (folder === 'android') {
+          // Add selectively to avoid adding huge compile/caching folders (.gradle, build, etc.)
+          const addFolderRecursively = (localPath: string, zipPath: string) => {
+            const items = fs.readdirSync(localPath);
+            for (const item of items) {
+              if (item === 'build' || item === '.gradle' || item === 'node_modules' || item === '.DS_Store' || item === '.idea') {
+                continue;
+              }
+              const fullItemPath = path.join(localPath, item);
+              const stat = fs.statSync(fullItemPath);
+              if (stat.isDirectory()) {
+                addFolderRecursively(fullItemPath, path.join(zipPath, item));
+              } else {
+                zip.addLocalFile(fullItemPath, zipPath);
+              }
+            }
+          };
+          addFolderRecursively(folderPath, folder);
+        } else {
+          zip.addLocalFolder(folderPath, folder);
+        }
+      }
+    }
+    
+    // Add root files
+    for (const file of filesToInclude) {
+      const filePath = path.join(rootDir, file);
+      if (fs.existsSync(filePath)) {
+        zip.addLocalFile(filePath);
+      }
+    }
+    
+    const zipBuffer = zip.toBuffer();
+    
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const fileName = `AminSmartFinance_${year}-${month}-${day}_${hours}-${minutes}_Project.zip`;
+    
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Length', zipBuffer.length);
+    res.send(zipBuffer);
+  } catch (err: any) {
+    console.error('Error generating project ZIP:', err);
+    res.status(500).json({ error: 'Failed to generate project backup ZIP', details: err?.message || String(err) });
   }
 });
 

@@ -234,8 +234,8 @@ export default function QuotationsTab({
     return quotations.filter(q => {
       const client = clients.find(c => c.id === q.customerId);
       const clientName = client ? client.name : '';
-      const matchesSearch = q.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            clientName.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = (q.id || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            (clientName || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'all' || q.status === statusFilter;
       return matchesSearch && matchesStatus;
     });

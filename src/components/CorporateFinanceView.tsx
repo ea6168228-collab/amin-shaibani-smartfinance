@@ -711,9 +711,9 @@ export default function CorporateFinanceView({
   // Filtering lists
   const filteredVouchers = useMemo(() => {
     return vouchers.filter(v => {
-      const matchSearch = v.beneficiaryOrPayer.toLowerCase().includes(voucherSearch.toLowerCase()) ||
-                          v.statement.toLowerCase().includes(voucherSearch.toLowerCase()) ||
-                          v.id.toLowerCase().includes(voucherSearch.toLowerCase());
+      const matchSearch = (v.beneficiaryOrPayer || '').toLowerCase().includes((voucherSearch || '').toLowerCase()) ||
+                          (v.statement || '').toLowerCase().includes((voucherSearch || '').toLowerCase()) ||
+                          (v.id || '').toLowerCase().includes((voucherSearch || '').toLowerCase());
       const matchType = voucherTypeFilter === 'all' ? true : v.type === voucherTypeFilter;
       const matchStatus = voucherStatusFilter === 'all' ? true : v.status === voucherStatusFilter;
       return matchSearch && matchType && matchStatus;
@@ -722,8 +722,8 @@ export default function CorporateFinanceView({
 
   const filteredLedgers = useMemo(() => {
     return ledgers.filter(lg => {
-      const matchSearch = lg.statement.toLowerCase().includes(ledgerSearch.toLowerCase()) ||
-                          lg.category.toLowerCase().includes(ledgerSearch.toLowerCase());
+      const matchSearch = (lg.statement || '').toLowerCase().includes((ledgerSearch || '').toLowerCase()) ||
+                          (lg.category || '').toLowerCase().includes((ledgerSearch || '').toLowerCase());
       const matchType = ledgerTypeFilter === 'all' ? true : lg.type === ledgerTypeFilter;
       const matchCategory = ledgerCategoryFilter === 'all' ? true : lg.category === ledgerCategoryFilter;
       return matchSearch && matchType && matchCategory;

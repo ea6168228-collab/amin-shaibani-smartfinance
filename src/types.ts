@@ -388,6 +388,61 @@ export interface ClientOrder {
   convertedToType?: 'quotation' | 'invoice';
 }
 
+export interface AppLicense {
+  installationId: string;
+  licenseKey: string;
+  customerName: string;
+  phone: string;
+  deviceId?: string;
+  activatedAt: string;
+  expiresAt?: string;
+  status: 'trial' | 'active' | 'expired' | 'blocked';
+}
+
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  username?: string;
+  action?: string;
+  module?: string;
+  details?: string;
+  deviceType?: string;
+  
+  // compatibility fields for existing offline audit logs
+  user?: string;
+  actionType?: string;
+  entity?: string;
+  notes?: string;
+  oldValue?: string;
+  newValue?: string;
+}
+
+export interface SystemBackupPayload {
+  version: '10.5';
+  exportedAt: string;
+  app: {
+    name: string;
+    version: string;
+  };
+  data: {
+    settings: AppSettings;
+    employees: Employee[];
+    financeSummaries?: any[];
+    financialOps?: any[];
+    associations: Association[];
+    associationMembers: AssociationMember[];
+    associationTransactions: AssociationTransaction[];
+    associationPayments: AssociationPayment[];
+    corporateLedgers: GeneralExpenseRevenue[];
+    vouchers: PaymentVoucher[];
+    customers: Client[];
+    customerDebts: ClientDebt[];
+    customerCollections: ClientCollection[];
+    auditLogs: AuditLog[];
+  };
+}
+
+
 
 
 

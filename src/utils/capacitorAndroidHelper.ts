@@ -95,3 +95,61 @@ export async function saveAndShareBackup(jsonString: string, fileName: string): 
     return false;
   }
 }
+
+/**
+ * Converts a standard file blob to a Base64 string.
+ */
+export function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(',')[1];
+      resolve(base64);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Saves a backup file to the device's custom Backup directory under Documents.
+ */
+export async function saveToDeviceBackupFolder(base64Data: string, fileName: string): Promise<{ success: boolean; path?: string; error?: string }> {
+  try {
+    if (!isNativeCapacitor()) {
+      return { success: false, error: 'ليس نظام تشغيل هاتف ذكي (Web Environment)' };
+    }
+
+    // Ensure permissions
+    const permStatus = await Filesystem.checkPermissions();
+    if (permStatus.publicStorage !== 'granted') {
+      await Filesystem.requestPermissions();
+    }
+
+    // Create 'Backup' directory recursively inside Documents folder
+    try {
+      await Filesystem.mkdir({
+        path: 'Backup',
+        directory: Directory.Documents,
+        recursive: true
+      });
+    } catch (e) {
+      // directory might already exist
+    }
+
+    // Write file
+    const cleanFileName = fileName.replace(/[^a-zA-Z0-9_\u0600-\u06FF\.-]/g, '_');
+    const result = await Filesystem.writeFile({
+      path: `Backup/${cleanFileName}`,
+      data: base64Data,
+      directory: Directory.Documents
+    });
+
+    return { success: true, path: result.uri };
+  } catch (error: any) {
+    console.error('Error saving to device Backup directory:', error);
+    return { success: false, error: error.message || String(error) };
+  }
+}
+

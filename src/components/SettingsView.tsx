@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { isNativeCapacitor, saveAndShareBackup } from '../utils/capacitorAndroidHelper';
+import { isNativeCapacitor, saveAndShareBackup, saveToDeviceBackupFolder, blobToBase64 } from '../utils/capacitorAndroidHelper';
 import { 
   Building2, 
   Save, 
@@ -27,12 +27,15 @@ import {
   RefreshCcw,
   Search,
   HelpCircle,
-  Calendar
+  Calendar,
+  FileArchive,
+  History,
+  HardDrive
 } from 'lucide-react';
 import { Employee, Transaction, AppSettings, UserRole } from '../types';
 import { getAuditLogs, clearAuditLogs, addAuditLog, AuditLog } from '../utils/auditLogger';
 import { getRolesConfig, saveRolesConfig, isAbsoluteOwner, isMonthLocked, RoleCode, RoleConfig, RolePermissions } from '../utils/permissions';
-import { createLocalSnapshot, getLocalSnapshots, restoreSystemFromPayload, downloadBackupFile, BackupSnapshot } from '../utils/backupSystem';
+import { createLocalSnapshot, getLocalSnapshots, restoreSystemFromPayload, downloadBackupFile, BackupSnapshot, getBackupHistory, addBackupHistoryLog, generateClientDataZip, extractPayloadFromFile, generateClientDataJson, generateBackupPayload, validateBackupIntegrity } from '../utils/backupSystem';
 
 interface SettingsViewProps {
   appSettings: AppSettings;
@@ -74,7 +77,8 @@ export default function SettingsView({
   const [newMonthInput, setNewMonthInput] = useState('');
   const [lockedMonths, setLockedMonths] = useState<string[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem('amin_sh_locked_months') || '[]');
+      const parsed = JSON.parse(localStorage.getItem('amin_sh_locked_months') || '[]');
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
@@ -86,6 +90,11 @@ export default function SettingsView({
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [restoreMessage, setRestoreMessage] = useState<{ type: 'success' | 'err', text: string } | null>(null);
+
+  // Backup & Restore state controls
+  const [backupProgress, setBackupProgress] = useState<number | null>(null);
+  const [backupStatusText, setBackupStatusText] = useState<string>('');
+  const [backupLogs, setBackupLogs] = useState(() => getBackupHistory());
 
   const isAdmin = currentUserRole === UserRole.ADMIN;
 
@@ -120,7 +129,7 @@ export default function SettingsView({
     }
     const typed = newType.trim();
     if (!typed) return;
-    if (customCategories.includes(typed)) {
+    if ((customCategories || []).includes(typed)) {
       alert('البند متاح ومدرج مسبقاً.');
       return;
     }
@@ -138,31 +147,243 @@ export default function SettingsView({
     }
   };
 
-  // Database Backup (تصدير قاعدة البيانات)
-  const handleExportDatabase = async () => {
-    const backupPayload = {
-      system: 'Amin Al-Shaibani Finance Core v3.0',
-      exportedAt: new Date().toISOString(),
-      employees,
-      transactions,
-      customCategories,
-      appSettings
-    };
+  // Database Backup & Full ZIP Recovery System
+  const handleCreateFullBackup = async () => {
+    try {
+      setBackupProgress(10);
+      setBackupStatusText('جاري تحضير واستيراد كشوفات قاعدة البيانات الحالية...');
+      
+      await new Promise(r => setTimeout(r, 400));
+      
+      setBackupProgress(30);
+      setBackupStatusText('جاري فحص وتدقيق تكامل الملفات والبيانات الصادرة...');
+      const payload = generateBackupPayload();
+      const integrity = validateBackupIntegrity(payload);
+      if (!integrity.isValid) {
+        throw new Error(integrity.error || 'فشلت عملية التحقق من سلامة البيانات قبل التصدير.');
+      }
+      
+      await new Promise(r => setTimeout(r, 400));
+      setBackupProgress(50);
+      setBackupStatusText('جاري ضغط وتجميع ملف البيانات بنسبة ضغط عالية (DEFLATE)...');
+      
+      const { blob, fileName } = await generateClientDataZip((percent) => {
+        setBackupProgress(50 + Math.round(percent * 0.3));
+      });
+      
+      const sizeInKb = (blob.size / 1024).toFixed(1) + ' KB';
+      
+      await new Promise(r => setTimeout(r, 300));
+      setBackupProgress(90);
+      setBackupStatusText('جاري الحفظ والمزامنة مع سجلات الجهاز المضيف...');
 
-    const jsonString = JSON.stringify(backupPayload, null, 2);
-    const formattedDate = new Date().toISOString().slice(0, 10);
-    const fileName = `نسخة_احتياطية_الشيباني_${formattedDate}.json`;
+      // Save to native Backup folder under Documents on Android 10+
+      if (isNativeCapacitor()) {
+        const base64 = await blobToBase64(blob);
+        const nativeResult = await saveToDeviceBackupFolder(base64, fileName);
+        if (nativeResult.success) {
+          addBackupHistoryLog(fileName, sizeInKb, 'zip_data', 'success');
+          addAuditLog('تصدير نسخة احتياطية', 'التحكم بالنسخ', `تم تجميع وحفظ النسخة الاحتياطية "${fileName}" في مجلد Backup الخاص بالجهاز بنجاح.`);
+          setBackupLogs(getBackupHistory());
+          
+          alert(`✅ تم حفظ النسخة الاحتياطية كاملة وموثوقة بنجاح!\n\nاسم الملف: ${fileName}\nالحجم: ${sizeInKb}\nالمسار على الجهاز: Documents/Backup/${fileName}`);
+        } else {
+          // Fallback to share sheet
+          const successShare = await saveAndShareBackup(JSON.stringify(payload), fileName.replace('.zip', '.json'));
+          if (successShare) {
+            addBackupHistoryLog(fileName, sizeInKb, 'zip_data', 'success');
+            setBackupLogs(getBackupHistory());
+          } else {
+            throw new Error(nativeResult.error || 'فشل حفظ النسخة في جهازك.');
+          }
+        }
+      } else {
+        // Browser download
+        const url = URL.createObjectURL(blob);
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", url);
+        downloadAnchor.setAttribute("download", fileName);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        
+        setTimeout(() => {
+          document.body.removeChild(downloadAnchor);
+          URL.revokeObjectURL(url);
+        }, 100);
+        
+        addBackupHistoryLog(fileName, sizeInKb, 'zip_data', 'success');
+        addAuditLog('تصدير نسخة احتياطية', 'التحكم بالنسخ', `تم تجميع وتنزيل النسخة الاحتياطية "${fileName}" كملف مضغوط عبر المتصفح.`);
+        setBackupLogs(getBackupHistory());
+      }
+      
+      setBackupProgress(100);
+      setBackupStatusText('اكتملت العملية بنجاح! تم التحقق وتصنيع الأرشيف.');
+      setTimeout(() => {
+        setBackupProgress(null);
+      }, 3000);
+      
+    } catch (err: any) {
+      console.error('Backup creation error:', err);
+      setBackupProgress(null);
+      addBackupHistoryLog('Error_Backup.zip', '0 KB', 'zip_data', 'failure', err.message || String(err));
+      setBackupLogs(getBackupHistory());
+      alert(`❌ فشل إنشاء النسخة الاحتياطية: ${err.message || String(err)}`);
+    }
+  };
 
-    if (isNativeCapacitor()) {
-      await saveAndShareBackup(jsonString, fileName);
-    } else {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(jsonString);
+  const handleDownloadRawJson = async () => {
+    try {
+      const { jsonString, fileName } = generateClientDataJson();
+      const sizeInKb = (jsonString.length / 1024).toFixed(1) + ' KB';
+      
+      if (isNativeCapacitor()) {
+        const success = await saveAndShareBackup(jsonString, fileName);
+        if (success) {
+          addBackupHistoryLog(fileName, sizeInKb, 'json_data', 'success');
+          setBackupLogs(getBackupHistory());
+          return;
+        }
+      }
+      
+      const blob = new Blob([jsonString], { type: 'application/json;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
       const downloadAnchor = document.createElement('a');
-      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("href", url);
       downloadAnchor.setAttribute("download", fileName);
       document.body.appendChild(downloadAnchor);
       downloadAnchor.click();
-      downloadAnchor.remove();
+      
+      setTimeout(() => {
+        document.body.removeChild(downloadAnchor);
+        URL.revokeObjectURL(url);
+      }, 100);
+      
+      addBackupHistoryLog(fileName, sizeInKb, 'json_data', 'success');
+      setBackupLogs(getBackupHistory());
+      alert(`✅ تم استخراج وحفظ قاعدة البيانات بصيغة JSON بنجاح!\n\nاسم الملف: ${fileName}`);
+    } catch (err: any) {
+      alert(`❌ فشل تصدير البيانات: ${err.message || String(err)}`);
+    }
+  };
+
+  const handleDownloadProjectFilesZip = async () => {
+    try {
+      setBackupProgress(20);
+      setBackupStatusText('جاري استدعاء خادم الويب وجمع ملفات كود المصدر والمشروع...');
+      
+      await new Promise(r => setTimeout(r, 400));
+      setBackupProgress(50);
+      setBackupStatusText('جاري تجميع وضغط المجلدات البرمجية والـ Android وملف codemagic...');
+      
+      const response = await fetch('/api/backup/project-zip');
+      if (!response.ok) {
+        throw new Error(`استجابة غير صالحة من الخادم (HTTP ${response.status})`);
+      }
+      
+      const blob = await response.blob();
+      const sizeInMb = (blob.size / (1024 * 1024)).toFixed(2) + ' MB';
+      
+      setBackupProgress(90);
+      setBackupStatusText('جاري تحميل كود المصدر وضغط المشروع كاملاً...');
+      
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const fileName = `AminSmartFinance_${year}-${month}-${day}_${hours}-${minutes}.zip`;
+      
+      const url = URL.createObjectURL(blob);
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", url);
+      downloadAnchor.setAttribute("download", fileName);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      
+      setTimeout(() => {
+        document.body.removeChild(downloadAnchor);
+        URL.revokeObjectURL(url);
+      }, 100);
+      
+      addBackupHistoryLog(fileName, sizeInMb, 'zip_project', 'success');
+      setBackupLogs(getBackupHistory());
+      addAuditLog('تصدير كود المصدر', 'التحكم بالنسخ', 'تم تنزيل كود المصدر الكامل للمشروع ومجلدات أندرويد بنجاح.');
+      
+      setBackupProgress(100);
+      setBackupStatusText('اكتمل تحميل كود المصدر للمشروع بنجاح!');
+      setTimeout(() => {
+        setBackupProgress(null);
+      }, 3000);
+    } catch (err: any) {
+      console.error('Error downloading project ZIP:', err);
+      setBackupProgress(null);
+      addBackupHistoryLog('Error_Project.zip', '0 MB', 'zip_project', 'failure', err.message || String(err));
+      setBackupLogs(getBackupHistory());
+      alert(`❌ فشل تنزيل ملفات المشروع وكود المصدر: ${err.message || String(err)}`);
+    }
+  };
+
+  const processImportedFile = async (file: File) => {
+    if (isReadOnly) {
+      alert('⚠️ عذراً، لا يمكن استيراد قاعدة البيانات أو استعادتها أثناء تفعيل وضع القراءة فقط.');
+      return;
+    }
+    if (!file) return;
+
+    try {
+      setBackupProgress(25);
+      setBackupStatusText('جاري فحص وقراءة هيكل الملف المختار للاستعادة...');
+      
+      const jsonContent = await extractPayloadFromFile(file, (percent) => {
+        setBackupProgress(25 + Math.round(percent * 0.4));
+      });
+      
+      setBackupProgress(75);
+      setBackupStatusText('جاري التحقق التلقائي لسلامة الحسابات وهيكل البيانات...');
+      
+      await new Promise(r => setTimeout(r, 400));
+      
+      const integrity = validateBackupIntegrity(jsonContent);
+      if (!integrity.isValid) {
+        throw new Error(integrity.error || 'هيكل البيانات المرفق غير صالح.');
+      }
+      
+      const restoreResult = restoreSystemFromPayload(jsonContent);
+      if (restoreResult.success) {
+        setEmployees(jsonContent.employees || []);
+        setTransactions(jsonContent.transactions || []);
+        if (jsonContent.customCategories) {
+          setCustomCategories(jsonContent.customCategories);
+        }
+        if (jsonContent.appSettings) {
+          setAppSettings(jsonContent.appSettings);
+          setInstName(jsonContent.appSettings.institution.name);
+          setInstPhone(jsonContent.appSettings.institution.phone);
+          setInstAddress(jsonContent.appSettings.institution.address);
+          setInstLogoText(jsonContent.appSettings.institution.logoText);
+        }
+        
+        setRestoreMessage({
+          type: 'success',
+          text: `✅ تم استيراد واستعادة قاعدة البيانات بنجاح تام! تم استيراد (${jsonContent.employees?.length || 0}) موظف و (${jsonContent.transactions?.length || 0}) حركة محاسبية مقيدة بسلامة تامة.`
+        });
+      } else {
+        throw new Error(restoreResult.message);
+      }
+      
+      setBackupProgress(100);
+      setBackupStatusText('اكتملت استعادة الحسابات بنجاح!');
+      setTimeout(() => {
+        setBackupProgress(null);
+      }, 3000);
+    } catch (err: any) {
+      console.error('Failed to restore database backup:', err);
+      setBackupProgress(null);
+      setRestoreMessage({
+        type: 'err',
+        text: `❌ فشل استرجاع السجلات: ${err?.message || 'يتطلب تحميل ملف باك اب صالح رسمي .json أو .zip'}`
+      });
     }
   };
 
@@ -175,49 +396,6 @@ export default function SettingsView({
     } else if (e.type === "dragleave") {
       setDragActive(false);
     }
-  };
-
-  const processImportedFile = (file: File) => {
-    if (isReadOnly) {
-      alert('⚠️ عذراً، لا يمكن استيراد قاعدة البيانات أو استعادتها أثناء تفعيل وضع القراءة فقط.');
-      return;
-    }
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const jsonContent = JSON.parse(e.target?.result as string);
-        
-        // Assert schema matching
-        if (jsonContent.employees && jsonContent.transactions) {
-          // Success load
-          setEmployees(jsonContent.employees);
-          setTransactions(jsonContent.transactions);
-          if (jsonContent.customCategories) {
-            setCustomCategories(jsonContent.customCategories);
-          }
-          if (jsonContent.appSettings) {
-            setAppSettings(jsonContent.appSettings);
-            setInstName(jsonContent.appSettings.institution.name);
-            setInstPhone(jsonContent.appSettings.institution.phone);
-            setInstAddress(jsonContent.appSettings.institution.address);
-            setInstLogoText(jsonContent.appSettings.institution.logoText);
-          }
-          setRestoreMessage({
-            type: 'success',
-            text: `✅ تم استيراد واستعادة قاعدة البيانات بنجاح! تم تحميل (${jsonContent.employees.length}) سجل موظفين و (${jsonContent.transactions.length}) حركات دفترية مقيدة.`
-          });
-        } else {
-          throw new Error('الملف لا يحتوي على البيانات المحاسبية المتوافقة مع النظام.');
-        }
-      } catch (err: any) {
-        setRestoreMessage({
-          type: 'err',
-          text: `❌ خطأ في ترميز الملف: ${err?.message || 'يتطلب تحميل ملف نسخة احتياطية صالح بامتداد .json'}`
-        });
-      }
-    };
-    reader.readAsText(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -262,7 +440,7 @@ export default function SettingsView({
       alert('⚠️ عذراً، إلغاء تجميد الحسابات أو إغلاقها يحتاج إلى صلاحية المالك الحصري لضمان سلامة الدفاتر.');
       return;
     }
-    const isLocked = lockedMonths.includes(month);
+    const isLocked = (lockedMonths || []).includes(month);
     let updated;
     if (isLocked) {
       updated = lockedMonths.filter(m => m !== month);
@@ -283,7 +461,7 @@ export default function SettingsView({
       alert('الرجاء إدخال صيغة صحيحة للشهر، مثال: YYYY-MM (2026-06)');
       return;
     }
-    if (lockedMonths.includes(newMonthInput)) {
+    if ((lockedMonths || []).includes(newMonthInput)) {
       alert('هذا الشهر مضاف مسبقاً في قائمة التصفية.');
       return;
     }
@@ -346,11 +524,11 @@ export default function SettingsView({
     const q = searchAuditQuery.toLowerCase().trim();
     if (!q) return true;
     return (
-      log.username.toLowerCase().includes(q) ||
-      log.action.toLowerCase().includes(q) ||
-      log.target.toLowerCase().includes(q) ||
-      log.details.toLowerCase().includes(q) ||
-      log.role.toLowerCase().includes(q)
+      (log.username || '').toLowerCase().includes(q) ||
+      (log.action || '').toLowerCase().includes(q) ||
+      (log.target || '').toLowerCase().includes(q) ||
+      (log.details || '').toLowerCase().includes(q) ||
+      (log.role || '').toLowerCase().includes(q)
     );
   }).reverse();
 
@@ -640,40 +818,90 @@ export default function SettingsView({
             <div className="space-y-6">
               
               {/* Databases Export/Restore backups */}
-              <div className="bg-white dark:bg-zinc-900 p-5 rounded-2xl border border-slate-100 dark:border-zinc-800 shadow-xs space-y-4">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 border-b border-slate-50 dark:border-zinc-800 pb-3 mb-2">
-                  <Database size={16} className="text-indigo-500" />
-                  <span>إجراءات النسخ الاحتياطي ومزامنة الملفات</span>
-                </h3>
+              <div className="bg-white dark:bg-zinc-900 p-6 rounded-2xl border border-slate-100 dark:border-zinc-800 shadow-xs space-y-6">
+                <div className="border-b border-slate-50 dark:border-zinc-800 pb-3 flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Database size={16} className="text-indigo-600" />
+                    <span>مركز النسخ الاحتياطي وإدارة الملفات الذكي</span>
+                  </h3>
+                  <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 px-2.5 py-0.5 rounded-full font-bold">
+                    حماية كاملة
+                  </span>
+                </div>
+
+                {/* Progress Indicators & Loading Logs */}
+                {backupProgress !== null && (
+                  <div className="bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 p-4 rounded-xl space-y-2">
+                    <div className="flex justify-between items-center text-xs font-bold text-indigo-700 dark:text-indigo-400">
+                      <span>{backupStatusText}</span>
+                      <span className="font-mono">{backupProgress}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">
+                      <div 
+                        className="bg-indigo-600 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${backupProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Success/Error indicator */}
                 {restoreMessage && (
-                  <div className={`p-3 rounded-lg text-xs font-bold border flex items-center gap-2 ${
+                  <div className={`p-3.5 rounded-xl text-xs font-bold border flex items-start gap-2.5 ${
                     restoreMessage.type === 'success' 
                       ? 'bg-emerald-50 text-emerald-700 border-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-950' 
                       : 'bg-red-50 text-red-700 border-red-100 dark:bg-red-950/20 dark:text-red-400 dark:border-red-950'
                   }`}>
-                    <FileCheck2 size={16} />
-                    <span>{restoreMessage.text}</span>
+                    <FileCheck2 size={16} className="flex-shrink-0 mt-0.5" />
+                    <span className="leading-relaxed">{restoreMessage.text}</span>
                   </div>
                 )}
 
-                {/* Direct Export anchor */}
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <button
-                    type="button"
-                    onClick={handleExportDatabase}
-                    className="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all text-center flex-1"
-                    title="تحميل السجل بالكامل كملف JSON"
-                  >
-                    <Download size={14} />
-                    <span>تحميل واستخراج قاعدة البيانات (.JSON)</span>
-                  </button>
+                {/* Backup Actions Column */}
+                <div className="space-y-2.5">
+                  <span className="block text-2xs font-extrabold text-slate-400 dark:text-zinc-500">خيارات استخراج وحفظ الملفات الحالية:</span>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {/* 1. Full Backup (Data + Device Folder) */}
+                    <button
+                      type="button"
+                      onClick={handleCreateFullBackup}
+                      className="bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] text-white font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all text-center"
+                      title="إنشاء نسخة كاملة بصيغة ZIP وحفظها تلقائياً بمسار النسخ بالجهاز"
+                    >
+                      <HardDrive size={14} />
+                      <span>إنشاء نسخة كاملة ومؤمنة (.ZIP)</span>
+                    </button>
+
+                    {/* 2. Download Project zip file */}
+                    <button
+                      type="button"
+                      onClick={handleDownloadProjectFilesZip}
+                      className="bg-emerald-600 hover:bg-emerald-750 text-white font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all text-center"
+                      title="تحميل كود مصدر النظام وملفات أندرويد و Gradle كملف مضغوط"
+                    >
+                      <FileArchive size={14} />
+                      <span>تنزيل كود المصدر والمشروع (.ZIP)</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    {/* 3. Download raw JSON database snapshot */}
+                    <button
+                      type="button"
+                      onClick={handleDownloadRawJson}
+                      className="bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 active:scale-[0.98] text-slate-700 dark:text-zinc-200 font-bold text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all text-center"
+                      title="تحميل البيانات الفورية كملف JSON"
+                    >
+                      <Download size={14} />
+                      <span>استخراج نسخة البيانات الفورية (.JSON)</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Drag and Drop Restore element */}
                 <div className="space-y-2">
-                  <span className="block text-2xs font-extrabold text-slate-400 dark:text-zinc-500">استيراد واستعادة كشوف قاعدة البيانات</span>
+                  <span className="block text-2xs font-extrabold text-slate-400 dark:text-zinc-500">استعادة البيانات وترميم السجلات:</span>
                   
                   <div
                     onDragEnter={isReadOnly ? undefined : handleDrag}
@@ -692,14 +920,54 @@ export default function SettingsView({
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".json"
+                      accept=".json,.zip"
                       onChange={handleFileInputChange}
                       className="hidden"
                     />
                     
-                    <Upload size={24} className="text-slate-400 animate-pulse" />
-                    <p className="text-xs font-bold text-slate-700 dark:text-zinc-200">اسحب ملف النسخة الاحتياطية هنا، أو انقر للتصفح</p>
-                    <span className="text-[10px] text-slate-400 dark:text-zinc-500 block">يقبل فقط ملفات التشفير الرسمية بامتداد .json المنزلة من النظام سابقاً.</span>
+                    <Upload size={24} className="text-slate-400 animate-bounce" />
+                    <p className="text-xs font-bold text-slate-700 dark:text-zinc-200">اسحب ملف النسخة هنا (.JSON أو .ZIP)، أو انقر للتصفح</p>
+                    <span className="text-[10px] text-slate-400 dark:text-zinc-500 block leading-normal text-center">
+                      يدعم النظام استعادة السجلات تلقائياً من الملفات المضغوطة .zip أو ملفات .json مع التحقق من سلامة الباك اب.
+                    </span>
+                  </div>
+                </div>
+
+                {/* 5. Backup History Log List (سجل عمليات النسخ الاحتياطي) */}
+                <div className="space-y-2.5 pt-2">
+                  <div className="flex items-center gap-1.5 border-t border-slate-50 dark:border-zinc-800 pt-4">
+                    <History size={14} className="text-slate-400" />
+                    <span className="text-2xs font-extrabold text-slate-400 dark:text-zinc-500">سجل عمليات النسخ الاحتياطي السابقة:</span>
+                  </div>
+
+                  <div className="max-h-40 overflow-y-auto pr-1 space-y-1.5">
+                    {backupLogs.map((log: any, idx: number) => (
+                      <div key={idx} className="p-2.5 bg-slate-50 dark:bg-zinc-850 border border-slate-100 dark:border-zinc-800/60 rounded-xl flex items-center justify-between gap-3 text-3xs">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                          <div className="flex flex-col truncate">
+                            <span className="font-bold text-slate-700 dark:text-zinc-200 truncate">{log.fileName}</span>
+                            <span className="text-slate-400 mt-0.5">{log.timestamp}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="font-mono text-slate-500 font-bold bg-slate-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
+                            {log.size}
+                          </span>
+                          <span className={`font-bold px-1.5 py-0.5 rounded ${
+                            log.type === 'zip_project' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400' :
+                            log.type === 'zip_data' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' :
+                            'bg-slate-100 text-slate-600 dark:bg-zinc-800 dark:text-zinc-400'
+                          }`}>
+                            {log.type === 'zip_project' ? 'كود النظام' : log.type === 'zip_data' ? 'بيانات مضغوطة' : 'بيانات JSON'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {backupLogs.length === 0 && (
+                      <p className="text-center py-4 text-3xs text-slate-400 italic">لا توجد عمليات نسخ احتياطي مسجلة حتى الآن.</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1120,9 +1388,10 @@ export default function SettingsView({
             <div className="overflow-y-auto max-h-96 pr-1 space-y-2 border border-slate-50 dark:border-zinc-850 rounded-xl p-3 bg-slate-50/25 dark:bg-zinc-900/10">
               {filteredLogs.map((log) => {
                 const getActionColor = (act: string) => {
-                  if (act.includes('حذف') || act.includes('إلغاء') || act.includes('تصفير')) return 'text-red-650 bg-red-500/5 border-red-500/20';
-                  if (act.includes('إضافة') || act.includes('تسجيل') || act.includes('إنشاء')) return 'text-emerald-700 bg-emerald-500/5  border-emerald-500/20';
-                  if (act.includes('تعديل') || act.includes('تحميل')) return 'text-indigo-600 bg-indigo-500/5 border-indigo-500/20';
+                  const actStr = act || '';
+                  if (actStr.includes('حذف') || actStr.includes('إلغاء') || actStr.includes('تصفير')) return 'text-red-650 bg-red-500/5 border-red-500/20';
+                  if (actStr.includes('إضافة') || actStr.includes('تسجيل') || actStr.includes('إنشاء')) return 'text-emerald-700 bg-emerald-500/5  border-emerald-500/20';
+                  if (actStr.includes('تعديل') || actStr.includes('تحميل')) return 'text-indigo-600 bg-indigo-500/5 border-indigo-500/20';
                   return 'text-slate-700 bg-slate-500/5 border-slate-500/20';
                 };
 

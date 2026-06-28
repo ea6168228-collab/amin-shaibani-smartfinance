@@ -373,8 +373,8 @@ export default function InvoicesTab({
     return invoices.filter(inv => {
       const client = clients.find(c => c.id === inv.customerId);
       const clientName = client ? client.name : '';
-      const matchesSearch = inv.id.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            clientName.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = (inv.id || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            (clientName || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'all' || inv.status === statusFilter;
       const matchesType = typeFilter === 'all' || inv.type === typeFilter;
       return matchesSearch && matchesStatus && matchesType;

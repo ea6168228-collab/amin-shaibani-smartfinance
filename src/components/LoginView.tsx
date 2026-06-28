@@ -423,18 +423,39 @@ export default function LoginView({ onLoginSuccess, onImportBackup }: LoginViewP
             otpRefs.current[0]?.focus();
           }, 100);
         } else {
-          const detail = data.error || data.message || '';
-          const errMsg = detail 
-            ? `فشل إرسال رمز التحقق عبر واتساب، تحقق من اتصال UltraMsg أو إعدادات API: ${detail}`
-            : 'فشل إرسال رمز التحقق عبر واتساب، تحقق من اتصال UltraMsg أو إعدادات API';
-          setVerificationError(errMsg);
+          // Fallback to local generation if WhatsApp send failed
+          const localCode = Math.floor(100000 + Math.random() * 900000).toString();
+          setGeneratedOtp(localCode);
+          setOtpValues(Array(6).fill(''));
+          setTimer(60);
+          setVerificationError(null);
+          setIsWhatsappFailed(true);
+          setSmsStatusMsg(null);
+          setSuccessMsg('تنبيه: نعتذر لتعذر إرسال الواتساب من المزود البوابي، تم تحديث رمز التحقق المحلي لعضويتك.');
+          setTimeout(() => {
+            otpRefs.current[0]?.focus();
+          }, 100);
         }
       } else {
-        setVerificationError('فشل إرسال رمز التحقق عبر واتساب، تحقق من اتصال UltraMsg أو إعدادات API');
+        const localCode = Math.floor(100000 + Math.random() * 900000).toString();
+        setGeneratedOtp(localCode);
+        setOtpValues(Array(6).fill(''));
+        setTimer(60);
+        setVerificationError(null);
+        setIsWhatsappFailed(true);
+        setSmsStatusMsg(null);
+        setSuccessMsg('تنبيه: تعذر إرسال الواتساب من المزود، تم تحديث رمز التحقق المحلي لعضويتك.');
       }
     } catch (e) {
       setIsLoading(false);
-      setVerificationError('فشل إرسال رمز التحقق عبر واتساب، تحقق من اتصال UltraMsg أو إعدادات API');
+      const localCode = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedOtp(localCode);
+      setOtpValues(Array(6).fill(''));
+      setTimer(60);
+      setVerificationError(null);
+      setIsWhatsappFailed(true);
+      setSmsStatusMsg(null);
+      setSuccessMsg('تنبيه: تعذر الاتصال بالخادم، تم تفعيل طبقة توليد الأرقام المحلية.');
     }
   };
 

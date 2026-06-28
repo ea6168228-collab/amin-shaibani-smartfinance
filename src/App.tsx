@@ -36,6 +36,9 @@ import { INITIAL_EMPLOYEES, INITIAL_TRANSACTIONS } from './db/mockData';
 import { addAuditLog } from './utils/auditLogger';
 import { hasSystemPermission, isAbsoluteOwner } from './utils/permissions';
 import { createLocalSnapshot, runAutoLoginBackupIfNeeded, restoreSystemFromPayload } from './utils/backupSystem';
+import { canAccess } from './security/access';
+import { isSessionValid } from './security/sessionGuard';
+import { safeReadJSON, safeWriteJSON } from './utils/storage/safeStorage';
 
 const DEFAULT_SETTINGS: AppSettings = {
   institution: {
@@ -158,6 +161,21 @@ export default function App() {
     return localStorage.getItem('amin_sh_user_id') || '';
   });
 
+  const [session, setSession] = useState<any>(() => {
+    return safeReadJSON<any>('user_session', null);
+  });
+
+  console.log('ENV MODE:', (import.meta as any).env?.MODE);
+  console.log('SESSION:', session);
+
+  const hasRole = (role: string) => {
+    return session?.role?.toLowerCase() === role.toLowerCase();
+  };
+
+  const isAdmin = () => hasRole('admin');
+  const isAccountant = () => hasRole('accountant');
+  const isViewer = () => hasRole('viewer');
+
   const isCustomWorkspace = currentUserRole === UserRole.USER && !!currentUserId && !['admin', 'accountant', 'viewer'].includes(currentUserId);
   const employeesKey = isCustomWorkspace ? `amin_sh_employees_${currentUserId}` : 'amin_sh_employees';
   const transactionsKey = isCustomWorkspace ? `amin_sh_transactions_${currentUserId}` : 'amin_sh_transactions';
@@ -176,56 +194,88 @@ export default function App() {
     setCurrentUserRole(cachedUserRole);
     setCurrentUserId(cachedUserId);
 
+    const cachedSessionObj = safeReadJSON<any>('user_session', null);
+    if (cachedLoggedIn) {
+      const normalizedRole = cachedUserRole.toLowerCase() || 'viewer';
+      const upgradedSession = {
+        username: cachedSessionObj?.username || cachedSessionObj?.name || cachedUserName || 'viewer',
+        fullName: cachedSessionObj?.fullName || cachedSessionObj?.name || cachedUserName || 'مستخدم افتراضي',
+        role: normalizedRole,
+        permissions: normalizedRole === 'admin' ? ['all'] : ['read', 'write'],
+        activeBranchId: cachedSessionObj?.activeBranchId || 'branch_01',
+        tokenExpires: cachedSessionObj?.tokenExpires || new Date(Date.now() + 3600 * 24 * 1000).toISOString()
+      };
+
+      if (!isSessionValid(upgradedSession)) {
+        console.warn('⚠️ Session is invalid or expired. Logging out.');
+        setIsLoggedIn(false);
+        setLoggedInUserName('');
+        setCurrentUserRole(UserRole.USER);
+        setCurrentUserId('');
+        setSession(null);
+        localStorage.removeItem('amin_sh_is_logged_in');
+        localStorage.removeItem('amin_sh_logged_user');
+        localStorage.removeItem('amin_sh_user_role');
+        localStorage.removeItem('amin_sh_user_id');
+        localStorage.removeItem('amin_sh_active_role');
+        localStorage.removeItem('user_session');
+      } else {
+        setSession(upgradedSession);
+        safeWriteJSON('user_session', upgradedSession);
+      }
+    } else {
+      setSession(null);
+      localStorage.removeItem('user_session');
+    }
+
     const isCustom = cachedUserId && !['admin', 'accountant', 'viewer'].includes(cachedUserId);
     const empKey = isCustom ? `amin_sh_employees_${cachedUserId}` : 'amin_sh_employees';
     const txKey = isCustom ? `amin_sh_transactions_${cachedUserId}` : 'amin_sh_transactions';
     const catKey = isCustom ? `amin_sh_categories_${cachedUserId}` : 'amin_sh_categories';
     const setKey = isCustom ? `amin_sh_settings_${cachedUserId}` : 'amin_sh_settings';
 
-    const cachedEmployees = localStorage.getItem(empKey);
-    const cachedTransactions = localStorage.getItem(txKey);
-    const cachedCategories = localStorage.getItem(catKey);
-    const cachedSettings = localStorage.getItem(setKey);
+    const cachedEmployees = safeReadJSON<any[]>(empKey, null);
+    const cachedTransactions = safeReadJSON<any[]>(txKey, null);
+    const cachedCategories = safeReadJSON<any[]>(catKey, null);
+    const cachedSettings = safeReadJSON<any>(setKey, null);
 
-    if (cachedEmployees) {
-      setEmployees(JSON.parse(cachedEmployees));
+    if (cachedEmployees && Array.isArray(cachedEmployees)) {
+      setEmployees(cachedEmployees);
     } else {
       if (isCustom) {
         setEmployees([]);
-        localStorage.setItem(empKey, JSON.stringify([]));
+        safeWriteJSON(empKey, []);
       } else {
-        // Seed initial mock data for gorgeous out-of-the-box view
         setEmployees(INITIAL_EMPLOYEES);
-        localStorage.setItem(empKey, JSON.stringify(INITIAL_EMPLOYEES));
+        safeWriteJSON(empKey, INITIAL_EMPLOYEES);
       }
     }
 
-    if (cachedTransactions) {
-      setTransactions(JSON.parse(cachedTransactions));
+    if (cachedTransactions && Array.isArray(cachedTransactions)) {
+      setTransactions(cachedTransactions);
     } else {
       if (isCustom) {
         setTransactions([]);
-        localStorage.setItem(txKey, JSON.stringify([]));
+        safeWriteJSON(txKey, []);
       } else {
-        // Seed initial mock transactions
         setTransactions(INITIAL_TRANSACTIONS);
-        localStorage.setItem(txKey, JSON.stringify(INITIAL_TRANSACTIONS));
+        safeWriteJSON(txKey, INITIAL_TRANSACTIONS);
       }
     }
 
-    if (cachedCategories) {
-      setCustomCategories(JSON.parse(cachedCategories));
+    if (cachedCategories && Array.isArray(cachedCategories)) {
+      setCustomCategories(cachedCategories);
     } else {
       if (isCustom) {
         setCustomCategories([]);
-        localStorage.setItem(catKey, JSON.stringify([]));
+        safeWriteJSON(catKey, []);
       } else {
         setCustomCategories(['سلفة الخميس العادية', 'مساهمة الكسوة والمناسبات']);
       }
     }
 
     if (cachedSettings) {
-      setAppSettings(JSON.parse(cachedSettings));
+      setAppSettings(cachedSettings);
     } else {
       setAppSettings(DEFAULT_SETTINGS);
     }
@@ -300,6 +350,19 @@ export default function App() {
     localStorage.setItem('amin_sh_logged_user', userName);
     localStorage.setItem('amin_sh_user_role', role);
     localStorage.setItem('amin_sh_user_id', id);
+
+    const userSession = {
+      name: userName,
+      role: role,
+      id: id
+    };
+    const normalizedRole = userSession.role?.toLowerCase?.() || 'viewer';
+    const cleanSession = {
+      ...userSession,
+      role: normalizedRole
+    };
+    setSession(cleanSession);
+    localStorage.setItem('user_session', JSON.stringify(cleanSession));
 
     // Set the specific active role for granular authorization layers
     let activeRole = 'owner';
@@ -378,11 +441,13 @@ export default function App() {
     setLoggedInUserName('');
     setCurrentUserRole(UserRole.USER);
     setCurrentUserId('');
+    setSession(null);
     localStorage.removeItem('amin_sh_is_logged_in');
     localStorage.removeItem('amin_sh_logged_user');
     localStorage.removeItem('amin_sh_user_role');
     localStorage.removeItem('amin_sh_user_id');
     localStorage.removeItem('amin_sh_active_role');
+    localStorage.removeItem('user_session');
     setActiveTab('dashboard'); // reset to default tab
 
     const empKey = 'amin_sh_employees';
@@ -390,10 +455,33 @@ export default function App() {
     const catKey = 'amin_sh_categories';
     const setKey = 'amin_sh_settings';
 
-    setEmployees(localStorage.getItem(empKey) ? JSON.parse(localStorage.getItem(empKey)!) : INITIAL_EMPLOYEES);
-    setTransactions(localStorage.getItem(txKey) ? JSON.parse(localStorage.getItem(txKey)!) : INITIAL_TRANSACTIONS);
-    setCustomCategories(localStorage.getItem(catKey) ? JSON.parse(localStorage.getItem(catKey)!) : ['سلفة الخميس العادية', 'مساهمة الكسوة والمناسبات']);
-    setAppSettings(localStorage.getItem(setKey) ? JSON.parse(localStorage.getItem(setKey)!) : DEFAULT_SETTINGS);
+    try {
+      const parsedEmp = JSON.parse(localStorage.getItem(empKey) || '[]');
+      setEmployees(Array.isArray(parsedEmp) ? parsedEmp : INITIAL_EMPLOYEES);
+    } catch {
+      setEmployees(INITIAL_EMPLOYEES);
+    }
+
+    try {
+      const parsedTx = JSON.parse(localStorage.getItem(txKey) || '[]');
+      setTransactions(Array.isArray(parsedTx) ? parsedTx : INITIAL_TRANSACTIONS);
+    } catch {
+      setTransactions(INITIAL_TRANSACTIONS);
+    }
+
+    try {
+      const parsedCat = JSON.parse(localStorage.getItem(catKey) || '[]');
+      setCustomCategories(Array.isArray(parsedCat) ? parsedCat : ['سلفة الخميس العادية', 'مساهمة الكسوة والمناسبات']);
+    } catch {
+      setCustomCategories(['سلفة الخميس العادية', 'مساهمة الكسوة والمناسبات']);
+    }
+
+    try {
+      const parsedSet = JSON.parse(localStorage.getItem(setKey) || '{}');
+      setAppSettings(parsedSet && typeof parsedSet === 'object' && !Array.isArray(parsedSet) ? parsedSet : DEFAULT_SETTINGS);
+    } catch {
+      setAppSettings(DEFAULT_SETTINGS);
+    }
   };
 
   // Handles restoring absolute database from JSON file (reusable on logins / settings)
@@ -452,6 +540,22 @@ export default function App() {
   // Render correct tab view dynamically
   const renderTabContent = () => {
     const isReadOnly = !!appSettings.readonlyMode;
+    const userRole = session?.role || 'viewer';
+
+    const renderAccessDenied = (moduleLabel: string) => {
+      return (
+        <div className="bg-white dark:bg-zinc-900 rounded-2xl p-8 border border-slate-250 dark:border-zinc-800 text-center shadow-lg max-w-lg mx-auto my-10">
+          <div className="w-16 h-16 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ShieldCheck size={32} />
+          </div>
+          <h3 className="text-lg font-black text-slate-900 dark:text-white mb-2">الوصول مقيد - حماية صلاحيات أمين</h3>
+          <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed font-medium">
+            عذراً، لا تمتلك الصلاحية الكافية لاستعراض أو تعديل قسم ({moduleLabel}) على مستوى النظام. يرجى التواصل مع مالك النظام للحصول على الإذن المطلوب.
+          </p>
+        </div>
+      );
+    };
+
     switch (activeTab) {
       case 'dashboard':
         return (
@@ -462,6 +566,9 @@ export default function App() {
           />
         );
       case 'employees':
+        if (!canAccess(userRole, 'employees')) {
+          return renderAccessDenied('الموظفين والسجلات الدفترية');
+        }
         return (
           <EmployeesView 
             employees={employees} 
@@ -473,6 +580,9 @@ export default function App() {
           />
         );
       case 'transactions':
+        if (!canAccess(userRole, 'employees')) {
+          return renderAccessDenied('سجل العمليات والقيود اليومية');
+        }
         return (
           <TransactionsLogView 
             employees={employees} 
@@ -493,6 +603,9 @@ export default function App() {
           />
         );
       case 'associations':
+        if (!canAccess(userRole, 'associations')) {
+          return renderAccessDenied('الجمعيات التعاونية السكنية');
+        }
         return (
           <AssociationsView 
             employees={employees}
@@ -503,6 +616,9 @@ export default function App() {
           />
         );
       case 'corporate-finance':
+        if (!canAccess(userRole, 'corporate_finance')) {
+          return renderAccessDenied('المالية العامة والحسابات الختامية');
+        }
         return (
           <CorporateFinanceView 
             employees={employees}
@@ -558,6 +674,9 @@ export default function App() {
             </div>
           );
         }
+        if (!canAccess(userRole, 'settings')) {
+          return renderAccessDenied('الإعدادات الأمنية والمحاسبية للمنظومة');
+        }
         return (
           <SettingsView 
             appSettings={appSettings}
@@ -578,6 +697,9 @@ export default function App() {
           />
         );
       case 'maintenance':
+        if (!canAccess(userRole, 'maintenance')) {
+          return renderAccessDenied('إدارة الصيانة وحقيبة الأمن السيبراني');
+        }
         return (
           <MaintenanceView 
             employees={employees}
@@ -730,6 +852,7 @@ export default function App() {
         institutionName={appSettings.institution.name}
         loggedInUserName={loggedInUserName}
         onLogout={handleLogout}
+        session={session}
       />
 
       {/* Main Viewport Container */}

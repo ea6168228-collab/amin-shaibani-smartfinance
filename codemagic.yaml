@@ -1,40 +1,43 @@
+# Codemagic configuration for Amin Smart Finance (نظام أمين الشيباني الذكي)
 workflows:
-  android-apk:
-    name: Android APK Build
-    max_build_duration: 120
-
+  android-capacitor:
+    name: Android Capacitor Build
+    max_build_duration: 60
+    instance_type: mac_mini_m1
     environment:
-      node: 22
-      java: 17
-
+      node: latest
+      gradle: latest
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: '*'
+          include: true
     scripts:
-      - name: Setup Node (Force 22)
+      - name: Install npm dependencies
         script: |
-          curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-          apt-get install -y nodejs
-          node -v
-
-      - name: Install dependencies
-        script: |
-          npm install
-
-      - name: Build web app
+          npm ci
+      - name: Build Web app
         script: |
           npm run build
-
-      - name: Verify build output
-        script: |
-          ls dist
-
       - name: Sync Capacitor Android
         script: |
           npx cap sync android
-
-      - name: Build Android APK
+      - name: Set up build.gradle versioning
+        script: |
+          # Automatically configure build variables if needed
+          echo "Building Android App..."
+      - name: Build Android Release APK & AAB
         script: |
           cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
-
+          ./gradlew assembleRelease bundleRelease
     artifacts:
-      - android/app/build/outputs/**/*.apk
+      - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/bundle/release/*.aab
+    publishing:
+      email:
+        recipients:
+          - ea6168228@gmail.com
+        notify:
+          success: true
+          failure: true

@@ -632,10 +632,10 @@ export default function MaintenanceView({
   const filteredLogs = systemLogs.filter(log => {
     const term = logsSearch.toLowerCase();
     return (
-      log.actionType.toLowerCase().includes(term) ||
-      log.entity.toLowerCase().includes(term) ||
-      (log.notes && log.notes.toLowerCase().includes(term)) ||
-      log.user.toLowerCase().includes(term)
+      (log.actionType || '').toLowerCase().includes(term) ||
+      (log.entity || '').toLowerCase().includes(term) ||
+      (log.notes && (log.notes || '').toLowerCase().includes(term)) ||
+      (log.user || '').toLowerCase().includes(term)
     );
   });
 
@@ -983,7 +983,8 @@ export default function MaintenanceView({
                 ) : (
                   <div className="divide-y divide-slate-100 dark:divide-zinc-850 text-xs bg-white dark:bg-zinc-900">
                     {filteredLogs.map((log) => {
-                      const isFix = log.actionType.includes('تعديل') || log.actionType.includes('حذف') || log.actionType.includes('صيانة');
+                      const actionTypeStr = log.actionType || '';
+                      const isFix = actionTypeStr.includes('تعديل') || actionTypeStr.includes('حذف') || actionTypeStr.includes('صيانة');
                       return (
                         <div key={log.id} className="p-3 hover:bg-slate-50/40 dark:hover:bg-zinc-800/30 transition-all">
                           <div className="flex justify-between items-start gap-4">

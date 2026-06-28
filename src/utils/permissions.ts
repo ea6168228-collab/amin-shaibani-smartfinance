@@ -172,8 +172,8 @@ export function isMonthLocked(dateString: string): boolean {
     const targetMonth = match[1];
 
     const lockedStr = localStorage.getItem('amin_sh_locked_months') || '[]';
-    const lockedList: string[] = JSON.parse(lockedStr);
-    return lockedList.includes(targetMonth);
+    const lockedList = JSON.parse(lockedStr);
+    return Array.isArray(lockedList) ? lockedList.includes(targetMonth) : false;
   } catch {
     return false;
   }
