@@ -11,30 +11,39 @@ workflows:
       events:
         - push
       branch_patterns:
-        - pattern: "*"
+        - pattern: '*'
           include: true
 
     scripts:
       - name: Install dependencies
-        script: |
-          npm ci
+        script: npm ci
 
-      - name: Build Web App
-        script: |
-          npm run build
+      - name: Build web
+        script: npm run build
 
-      - name: Sync Capacitor Android
-        script: |
-          npx cap sync android
+      - name: Sync Capacitor
+        script: npx cap sync android
 
-      - name: Fix Gradle Permissions
-        script: |
-          chmod +x android/gradlew
+      - name: Fix permissions
+        script: chmod +x android/gradlew
 
-      - name: Build Android APK & AAB
+      - name: Build Android
         script: |
           cd android
           ./gradlew clean
+          ./gradlew assembleRelease bundleRelease
+
+    artifacts:
+      - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/bundle/release/*.aab
+
+    publishing:
+      email:
+        recipients:
+          - ea6168228@gmail.com
+        notify:
+          success: true
+          failure: true          ./gradlew clean
           ./gradlew assembleRelease bundleRelease
 
     artifacts:
