@@ -6,7 +6,8 @@ workflows:
     instance_type: mac_mini_m1
     environment:
       node: latest
-      gradle: latest
+      environment:
+  node: 22
     triggering:
       events:
         - push
