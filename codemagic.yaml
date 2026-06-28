@@ -1,4 +1,3 @@
-# Codemagic configuration for Amin Smart Finance (نظام أمين الشيباني الذكي)
 workflows:
   android-capacitor:
     name: Android Capacitor Build
@@ -16,11 +15,11 @@ workflows:
           include: true
 
     scripts:
-      - name: Install npm dependencies
+      - name: Install dependencies
         script: |
           npm ci
 
-      - name: Build Web app
+      - name: Build Web App
         script: |
           npm run build
 
@@ -28,13 +27,27 @@ workflows:
         script: |
           npx cap sync android
 
-      - name: Build Android Release APK & AAB
+      - name: Fix Gradle Permissions
+        script: |
+          chmod +x android/gradlew
+
+      - name: Build Android APK & AAB
         script: |
           cd android
+          ./gradlew clean
           ./gradlew assembleRelease bundleRelease
 
     artifacts:
       - android/app/build/outputs/apk/release/*.apk
+      - android/app/build/outputs/bundle/release/*.aab
+
+    publishing:
+      email:
+        recipients:
+          - ea6168228@gmail.com
+        notify:
+          success: true
+          failure: true      - android/app/build/outputs/apk/release/*.apk
       - android/app/build/outputs/bundle/release/*.aab
 
     publishing:
