@@ -733,7 +733,7 @@ app.get('/api/backup/project-zip', (req, res) => {
     const rootDir = process.cwd();
     
     // Add critical folders & files selectively to minimize size and exclude node_modules, build outputs, .git, etc.
-    const foldersToInclude = ['src', 'public', 'assets', 'android'];
+    const foldersToInclude = ['src', 'public', 'assets', 'android', 'server'];
     const filesToInclude = [
       'package.json',
       'package-lock.json',
