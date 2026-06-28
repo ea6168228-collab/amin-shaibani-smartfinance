@@ -4,37 +4,46 @@ workflows:
     name: Android Capacitor Build
     max_build_duration: 60
     instance_type: mac_mini_m1
+
     environment:
-      node: latest
-      environment:
-  node: 22
+      node: 22
+
     triggering:
       events:
         - push
       branch_patterns:
-        - pattern: '*'
+        - pattern: "*"
           include: true
+
     scripts:
       - name: Install npm dependencies
         script: |
           npm ci
+
       - name: Build Web app
         script: |
           npm run build
+
       - name: Sync Capacitor Android
         script: |
           npx cap sync android
-      - name: Set up build.gradle versioning
-        script: |
-          # Automatically configure build variables if needed
-          echo "Building Android App..."
+
       - name: Build Android Release APK & AAB
         script: |
           cd android
           ./gradlew assembleRelease bundleRelease
+
     artifacts:
       - android/app/build/outputs/apk/release/*.apk
       - android/app/build/outputs/bundle/release/*.aab
+
+    publishing:
+      email:
+        recipients:
+          - ea6168228@gmail.com
+        notify:
+          success: true
+          failure: true      - android/app/build/outputs/bundle/release/*.aab
     publishing:
       email:
         recipients:
